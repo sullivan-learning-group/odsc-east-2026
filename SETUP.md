@@ -44,15 +44,22 @@ If you don't want to set up a local environment, use Colab. Everything runs in y
 
 ### Steps
 
-1. Open the workshop's Colab link (provided in the conference materials and pinned in the workshop chat).
-2. The first cell of the verification notebook downloads the data and dependencies. Run it.
-3. Run all remaining cells.
+1. Open the shared workshop folder on Google Drive: [odsc-east-2026 on Google Drive](https://drive.google.com/drive/folders/1nhCLEMUgZtOlxXY7rKAr2_i9NaRKGOml?usp=sharing).
+2. Add it to your own Drive so Colab can read and write the files. From the folder view, click the folder name at the top → **Organize** → **Add shortcut** → choose **My Drive**.
+3. In Colab, mount your Drive and install dependencies:
+   ```python
+   from google.colab import drive
+   drive.mount('/content/drive')
+   %cd /content/drive/MyDrive/odsc-east-2026
+   !pip install -r requirements.txt
+   ```
+4. Open `notebooks/00_verify_setup.ipynb` from the Drive folder (right-click → **Open with → Google Colaboratory**) and run all cells.
 
 If everything passes, you are set.
 
 ### Notes
 
-The Colab backup uses the same notebooks and the same data. The only difference is the bootstrap cell at the top of each notebook that detects Colab and downloads the workshop files from the public release. Local-Jupyter participants don't need that cell.
+The Colab path uses the same notebooks and the same data as the local path — the Drive folder is a copy of the workshop repo. If you want to edit a notebook without affecting the shared copy, use **File → Save a copy in Drive** in Colab, which forks it into your own Drive.
 
 ---
 
