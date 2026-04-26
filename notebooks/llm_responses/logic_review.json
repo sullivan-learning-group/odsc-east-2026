@@ -1,0 +1,82 @@
+{
+  "model": "claude-sonnet-4-5 (cached representative response)",
+  "captured_at": "2026-04-26",
+  "summary": "Function-by-function walkthrough of coffee_shop_des.py. The implementation follows the five-function architecture prescribed by Template B: an entity process, an entity generator, a single-replication runner, a scenario runner, and a comparison routine. Helper utilities for sampling, queue inspection, and analytical pre-checks are factored cleanly. Two clarifying notes worth understanding before reading the code.",
+  "clarifying_notes_first": [
+    "The simulation clock is in *minutes from store opening* (7 AM = t=0, 5 PM = t=600). All time arithmetic in the code is in this frame.",
+    "The Resource is a single SimPy Resource with capacity = number of currently-on-shift baristas. Capacity is mutated at shift boundaries; this is non-standard SimPy and is the trickiest part of the file."
+  ],
+  "function_walkthrough": [
+    {
+      "name": "_assign_order_type(rng)",
+      "purpose": "Sample one of {drip, espresso, blended} from the 30/50/20 mix.",
+      "how": "Draws a uniform [0,1) and walks the cumulative-probability vector. No state.",
+      "watch_for": "If you change the order mix in the spec, the cumulative-probabilities are computed once at module load — restart the kernel after edits."
+    },
+    {
+      "name": "_draw_service_time(order_type, rng, multiplier)",
+      "purpose": "Draw a single service time in minutes given the order type and the active scenario service-time multiplier.",
+      "how": "Looks up (mu, sigma) for the order type, draws np.random.lognormal, then multiplies by `multiplier` (1.0 in the baseline, 0.85 during the morning rush in Scenario C).",
+      "watch_for": "The multiplier is applied multiplicatively to a sampled value, not to the lognormal parameters. If you wanted the multiplier to scale the *distribution* (so that the entire shape shifts) rather than each draw, the math would be different — adjusting `mu` instead. The current behavior is correct for the workshop's framing of 'each individual order is 15% faster' but worth knowing."
+    },
+    {
+      "name": "_queue_length(baristas)",
+      "purpose": "Number of customers currently waiting (not yet allocated a barista).",
+      "how": "Returns len(baristas.queue). The Resource tracks a list of pending requests; that list's length is the queue.",
+      "watch_for": "Customers being served are not in this count. If you wanted 'people in the shop' (waiting + being served), use len(baristas.queue) + baristas.count."
+    },
+    {
+      "name": "_arrival_rate(t)",
+      "purpose": "Return the customers-per-hour rate at simulation time t (minutes from open).",
+      "how": "Walks the ARRIVAL_WINDOWS list and finds the first window that contains t.",
+      "watch_for": "Returns 0 outside the configured windows. Closing time is implicitly handled because the entity_generator stops at SIM_DURATION."
+    },
+    {
+      "name": "entity_process(env, name, baristas, scenario, rng, metrics)",
+      "purpose": "The customer's lifecycle: arrive → balking decision → wait if joining → service → depart, recording everything to `metrics`.",
+      "how": "Records arrival_time, decides balking via _queue_length, requests a barista, yields until granted, draws service time using the scenario's multiplier, yields the service duration, then appends a record. Walkaways append a separate record with NaN wait/service.",
+      "watch_for": "This is where the spec-compliance bug in coffee_shop_des_buggy.py lives. The order of operations matters here more than anywhere else in the file: Template A says balking is at *arrival*, before joining the queue. Read the order of statements carefully when comparing canonical and buggy versions."
+    },
+    {
+      "name": "entity_generator(env, baristas, scenario, rng, metrics)",
+      "purpose": "Produce the time-varying Poisson arrival stream and launch one entity_process per arrival.",
+      "how": "Repeatedly draws an exponential inter-arrival gap using the *current* window's rate, yields env.timeout(gap), then env.process(entity_process(...)) for the new customer. Continues until env.now exceeds SIM_DURATION.",
+      "watch_for": "Uses thinning by recomputing the rate after each arrival. This is correct for piecewise-constant rates but would need adjustment for continuously varying rates."
+    },
+    {
+      "name": "manage_baristas(env, baristas, scenario)",
+      "purpose": "Adjust the Resource's capacity at scheduled shift boundaries.",
+      "how": "For each (start, end, n_baristas) tuple in the scenario's staffing schedule, yields until the boundary, then mutates baristas._capacity. Wakes any pending requests when capacity increases.",
+      "watch_for": "Mutating _capacity is non-standard SimPy. The internal API may change between SimPy versions. The workshop pins SimPy to a known version for this reason."
+    },
+    {
+      "name": "run_single_replication(scenario, seed)",
+      "purpose": "Run one full simulated day under the given scenario.",
+      "how": "Creates a fresh Environment, RNG, Resource, and metrics list. Schedules the entity_generator and the manage_baristas process. Runs env.run(until=SIM_DURATION). Returns a per-customer DataFrame and the queue trace.",
+      "watch_for": "The seed is the only non-fixed input. Per-replication seeds differ by 1 in run_scenario, ensuring no two replications use the same RNG."
+    },
+    {
+      "name": "summarise_replication(df, scenario)",
+      "purpose": "Compute one-row summary statistics for a single replication.",
+      "how": "Filters out warm-up records (arrival_time < WARMUP), separates served from walkaways, computes mean / median / P90 / max wait among served customers, walkaway rate, and per-window utilization from cumulative service time over capacity-minutes.",
+      "watch_for": "Utilization is computed empirically (sum of service times / available barista-minutes). This is the number that gets sanity-checked against the analytical M/M/c prediction in Template C."
+    },
+    {
+      "name": "run_scenario(scenario, n_replications)",
+      "purpose": "Run N independent replications and return summary, per-customer detail (rep 0 only), and queue trace (rep 0 only).",
+      "how": "Loops N_REPLICATIONS times with deterministic seeds (BASE_SEED + i). Calls summarise_replication on each.",
+      "watch_for": "Saving full per-customer detail for all replications would be expensive at scale. The current code keeps detail for replication 0 only; this is fine for plotting but means the wait-time histogram in Block 4 reflects one day, not the full N replications."
+    },
+    {
+      "name": "compare_scenarios(results)",
+      "purpose": "Aggregate the per-replication summaries from multiple scenarios into a side-by-side comparison.",
+      "how": "Stacks the summary DataFrames, computes mean and 95% CI per metric per scenario.",
+      "watch_for": "Standard CI assumes approximate normality of the replication mean. With 50 replications this is fine for mean wait; for tail metrics (P90, max) consider bootstrapping if you need tight CIs."
+    }
+  ],
+  "follow_up_questions_to_ask_the_llm": [
+    "Where would I add a reneging rule (customers leave after waiting N minutes) without breaking the entity_process structure?",
+    "If the manage_baristas function mutates a private attribute, what is the SimPy-supported way to get time-varying resource capacity?",
+    "How should I refactor run_scenario to keep per-customer detail for all replications without bloating memory?"
+  ]
+}

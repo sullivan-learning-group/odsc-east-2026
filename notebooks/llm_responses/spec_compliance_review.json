@@ -1,0 +1,45 @@
+{
+  "model": "claude-sonnet-4-5 (cached representative response)",
+  "captured_at": "2026-04-26",
+  "summary": "Reviewed coffee_shop_des_buggy.py against Template A (the coffee shop process and resource spec) and the supplied baseline results. Found two issues that warrant attention: one spec deviation in how balking is implemented, and one missing input-validation check. Also noted three observations about validation hygiene that are not bugs but are worth flagging for completeness.",
+  "issues": [
+    {
+      "id": "B1",
+      "severity": "high",
+      "category": "spec_deviation",
+      "title": "Balking check fires after yield req, not at arrival",
+      "evidence": "Template A, Section 5 (Queue Behavior): 'Balking — a customer who arrives and sees the line at length \u2265 8 turns around and leaves immediately. The balking decision is made at arrival, before the customer joins the line.' The implementation in entity_process places the balking check inside the `with baristas.request() as req:` block, after `yield req` has already returned. By that point the customer has waited in the queue and been allocated a barista; the queue length being inspected is the residual queue behind this customer, not the queue this customer saw at arrival. This violates the spec's 'at arrival' requirement.",
+      "why_it_matters": "The summary metrics conceal this defect. Walkaway rate moves only modestly (about 1.3% with the bug versus about 0.9% under spec-compliant balking), P90 wait shifts by under a minute, and the maximum queue length is unchanged because the resource caps concurrent service at the number of baristas. A reviewer looking only at the metrics dashboard would see plausible numbers and miss the deviation. The behavioral consequence in the wild: customers who should walk away at arrival instead wait their full service-time-equivalent in line and then walk away without being served, which is a worse customer experience than the spec models and worse than what the simulation is reporting.",
+      "fix": "Move the balking check above the `with baristas.request()` block so it runs at arrival on the queue length the customer actually sees. The diff is one block move of seven to nine lines."
+    },
+    {
+      "id": "B2",
+      "severity": "medium",
+      "category": "missing_input_validation",
+      "title": "No guard that drawn service times are positive",
+      "evidence": "_draw_service_time samples from a lognormal distribution and applies the scenario service-time multiplier. Lognormal samples are mathematically guaranteed to be positive, so under normal operation this is fine. However, Template A, Section 6 (Constraints), states: 'Service time must be strictly positive. Any non-positive draw is an error condition.' The code does not assert this. If someone later changes the distribution to one that allows zero or negative draws (for example, a normal distribution with a low mean during a what-if exercise), the simulation would silently accept the bad input and produce nonsensical wait times.",
+      "why_it_matters": "This is a defensive-coding gap rather than a current bug. The risk is that a future modification breaks the implicit assumption without any visible failure. A one-line assertion catches that class of regression cheaply.",
+      "fix": "Add `assert service_time > 0, f'service_time must be positive, got {service_time}'` immediately after the draw."
+    }
+  ],
+  "observations_not_bugs": [
+    {
+      "id": "O1",
+      "category": "validation_hygiene",
+      "note": "Warm-up is a static 30 minutes, hard-coded as the constant WARMUP. Template A documents this as a deliberate choice for the non-stationary morning rush; flagging only because participants should be aware it is not derived from a convergence check. If the arrival pattern changes substantively, the warm-up will need to be revisited."
+    },
+    {
+      "id": "O2",
+      "category": "validation_hygiene",
+      "note": "Replication count is fixed at 50. The CI implied by the standard error of the per-replication mean wait is acceptable for the differences we are trying to detect across scenarios, but a doubling-the-reps convergence check is not in the supplied code. Worth running once and saving the result rather than skipping."
+    },
+    {
+      "id": "O3",
+      "category": "spec_compliance",
+      "note": "The M/M/c sanity check predicted in Template A (utilization \u2248 0.83 in the morning rush at 2 baristas, and \u2248 0.56 at 3) is reproduced by the simulation to within 0.01. The sanity check passes. This is not a bug, but it is the kind of pre-check Template C asks for and it is worth surfacing the result rather than letting it sit silent."
+    }
+  ],
+  "false_positives_to_watch_for": [
+    "An LLM looking at this code may flag the lack of explicit handling for customer reneging (leaving after waiting too long). Template A explicitly excludes reneging from this model — only balking is in scope. If the LLM raises this, it is a scope misread, not a bug."
+  ]
+}

@@ -1,0 +1,19 @@
+# ODSC East 2026 — Spec-Driven Simulation Modeling
+# Python 3.10+ recommended. Tested with Python 3.10 and 3.12.
+
+# Core simulation and numerics
+simpy>=4.1,<5.0
+numpy>=1.26,<3.0
+scipy>=1.13,<2.0
+pandas>=2.1,<3.0
+matplotlib>=3.8,<4.0
+
+# Notebook environment
+jupyter>=1.1,<2.0
+ipykernel>=6.29,<7.0
+nbformat>=5.10,<6.0
+
+# Optional — only needed for the live LLM cell in Block 5
+# Workshop ships with a saved-response fallback, so this is not strictly required.
+# If you want to run the live API call, install this and set ANTHROPIC_API_KEY.
+anthropic>=0.34,<1.0

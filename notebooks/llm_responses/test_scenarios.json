@@ -1,0 +1,56 @@
+{
+  "model": "claude-sonnet-4-5 (cached representative response)",
+  "captured_at": "2026-04-26",
+  "context": "Adversarial and edge-case scenarios beyond the four (Baseline, A, B, C) already in Template A. Goal is to stress the model and surface places where the structure may not hold up. Each scenario states what changes from baseline, what we expect to see, and what would *invalidate* the simulation if observed.",
+  "scenarios": [
+    {
+      "id": "S1",
+      "name": "Sudden 50% morning rush spike",
+      "category": "demand_shock",
+      "what_changes": "Multiply the morning-rush arrival rate from 30/hr to 45/hr for one specific 30-minute window in the middle of the rush (e.g., 7:45 AM to 8:15 AM). All other windows unchanged. Run under each staffing scenario.",
+      "expected_behavior": "Walkaway rate climbs sharply — particularly under Baseline (2 baristas) where arrival rate temporarily exceeds capacity by 25%. P90 wait should spike during and just after the burst, then recover. Scenario A (3 baristas during rush) absorbs the spike better.",
+      "what_would_invalidate": "If the simulation shows essentially no change in walkaway rate or wait distribution under Baseline, something is wrong — the queue dynamics are not responding to a clear capacity overload. This is the kind of test that would have caught the spec-deviation bug in the buggy file even at the metrics level."
+    },
+    {
+      "id": "S2",
+      "name": "Barista calls in sick at 8:00 AM",
+      "category": "resource_shock",
+      "what_changes": "In an otherwise-baseline run, drop barista capacity from 2 to 1 starting at minute 60 (8:00 AM) and recover to 2 at minute 120 (9:00 AM). Models a single missing employee for one hour during the peak.",
+      "expected_behavior": "Walkaway rate during 8:00-9:00 should climb dramatically because the single barista is operating at ~167% of theoretical capacity for that hour. Queue length will hit the balking threshold repeatedly. After 9:00 AM the queue should drain over 15-20 minutes back to the steady-state pattern.",
+      "what_would_invalidate": "If the simulation does not produce visible queue buildup during the 8-9 AM window, the time-varying capacity logic in manage_baristas is broken. Also a useful test of whether the queue trace aligns with the period of reduced capacity."
+    },
+    {
+      "id": "S3",
+      "name": "All-blended morning",
+      "category": "service_time_shock",
+      "what_changes": "Force the order-type assignment to return 'blended' for every customer that arrives between 7:00 and 9:00 AM. Average service time in that window jumps from 3.33 to 4.69 minutes; per-barista service rate drops from 18/hr to ~12.8/hr.",
+      "expected_behavior": "With 2 baristas, the morning utilization rises from 0.83 to ~1.17 — over capacity. Walkaways and queue length should saturate. Mean wait diverges. This is a genuinely overloaded system, not a 'busy but coping' one.",
+      "what_would_invalidate": "If walkaway rate stays low and the queue does not max out at the balking threshold for extended periods, the service-time multiplier logic or the order-type assignment is not flowing through correctly."
+    },
+    {
+      "id": "S4",
+      "name": "Reneging — customers leave after waiting 8 minutes",
+      "category": "behavioral_extension",
+      "what_changes": "Adds a reneging rule on top of balking: a customer who has been in the queue for 8 minutes leaves. Spec extension; not in the current Template A.",
+      "expected_behavior": "Walkaway rate slightly higher than Baseline (the long-tail wait customers now leave instead of being served eventually). P90 wait should compress because reneging caps the waits we observe among served customers.",
+      "what_would_invalidate": "If P90 wait does not compress when reneging is added, something about how reneging interacts with the served vs. walkaway accounting is wrong. Also a test of whether the model's structure can accommodate a second customer-departure mechanism cleanly."
+    },
+    {
+      "id": "S5",
+      "name": "Zero-arrival hour to validate utilization arithmetic",
+      "category": "sanity_check",
+      "what_changes": "Set the 9:00-11:00 AM arrival rate to 0. Customers from earlier windows still need serving but no new arrivals. Tests that the simulation handles empty arrival windows without error and that utilization calculations correctly reflect the idle period.",
+      "expected_behavior": "Queue drains to zero within 10-15 minutes after 9:00 AM (the longest possible service time of customers already in line). Utilization in the 9-11 window approaches 0. Total served customers reduced by the expected ~28 (14/hr * 2hrs).",
+      "what_would_invalidate": "If utilization for the 9-11 window does not approach zero, the empirical utilization computation is including time outside the staffing window or is otherwise miscounting. This catches a class of off-by-one window-boundary bugs."
+    },
+    {
+      "id": "S6",
+      "name": "Closing time enforcement",
+      "category": "boundary_condition",
+      "what_changes": "Customer arrives at minute 595 (4:55 PM, five minutes before close) with a blended-drink service time of 6 minutes. What happens at minute 600 when the simulation ends?",
+      "expected_behavior": "The customer is either fully served (simulation runs past nominal close to finish in-progress service — typical real-world behavior) or is recorded as 'still being served' at sim end. Either is defensible; the spec should specify which.",
+      "what_would_invalidate": "If the customer is recorded with a service_time > 0 but no departure_time, or if their wait_time is computed incorrectly, the closing-boundary handling has a corner case. This is not a bug at metric scale but matters for downstream reporting."
+    }
+  ],
+  "facilitator_note": "S1 and S2 are the most useful in workshop discussion because they directly stress the bug class from Block 5: a system that looks fine on average can fall apart under modest stress. S4 is the one participants most often raise unprompted, so having a clean answer for it is valuable. S5 and S6 are validation hygiene more than scenario discovery."
+}
