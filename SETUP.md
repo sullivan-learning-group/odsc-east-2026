@@ -44,7 +44,7 @@ If you don't want to set up a local environment, use Colab. Everything runs in y
 
 ### Steps
 
-1. Open the shared workshop folder on Google Drive: [odsc-east-2026 on Google Drive](https://drive.google.com/drive/folders/1nhCLEMUgZtOlxXY7rKAr2_i9NaRKGOml?usp=sharing).
+1. Open the shared workshop folder on Google Drive: [bit.ly/4tL4uvW](https://bit.ly/4tL4uvW) (full link: [odsc-east-2026 on Google Drive](https://drive.google.com/drive/folders/1nhCLEMUgZtOlxXY7rKAr2_i9NaRKGOml?usp=sharing)).
 2. Add it to your own Drive so Colab can read and write the files. From the folder view, click the folder name at the top → **Organize** → **Add shortcut** → choose **My Drive**.
 3. In Colab, mount your Drive and install dependencies:
    ```python
