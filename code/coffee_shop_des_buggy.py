@@ -361,13 +361,19 @@ def summarise_replication(df: pd.DataFrame, scenario: Scenario) -> dict:
     }
 
     # ── utilisation by time window ───────────────────────────────────
-    # Utilisation = time baristas are busy / (n_baristas × window_duration)
+    # Utilisation = time baristas are busy / (n_baristas × post-warmup window).
+    # Both numerator and denominator must exclude the warm-up portion of the
+    # window; otherwise the metric is biased low by the warm-up ratio.
     for start, end, n in scenario.staffing_schedule:
+        effective_start = max(start, WARMUP)
+        if effective_start >= end:
+            summary[f"util_{start}_{end}"] = 0.0
+            continue
         window_served = served[
-            (served["arrival_time"] >= start) & (served["arrival_time"] < end)
+            (served["arrival_time"] >= effective_start) & (served["arrival_time"] < end)
         ]
         busy_time = window_served["service_time"].sum()
-        available_time = n * (end - start)
+        available_time = n * (end - effective_start)
         label = f"util_{start}_{end}"
         summary[label] = busy_time / available_time if available_time > 0 else 0.0
 

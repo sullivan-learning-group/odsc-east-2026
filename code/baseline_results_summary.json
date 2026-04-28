@@ -1,0 +1,12 @@
+{
+  "scenario": "Baseline",
+  "n_replications": 50,
+  "mean_wait_min": 1.97,
+  "p90_wait_min": 6.379,
+  "walkaway_rate_pct": 0.793,
+  "mean_served_per_day": 149.4,
+  "mean_walkaways_per_day": 1.26,
+  "morning_utilization": 0.82,
+  "max_queue_length_rep0": 8,
+  "daily_cost_usd": 289
+}
