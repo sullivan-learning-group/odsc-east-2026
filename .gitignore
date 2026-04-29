@@ -4,3 +4,6 @@ presentation/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+*.png
+*.csv
+qa_view/
